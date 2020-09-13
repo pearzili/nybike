@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.tedu.nybike.mapper.OperationMapper">
+		<!-- 添加一条用户操作记录 -->
+		<!-- Integer insertOperation(OperationDo opt) -->
+		<insert id="insertOperation">
+			insert into t_operation(
+				opt_type,user_ip,station_id,
+				drag_start_lat,drag_start_lon,drag_end_lat,
+				drag_end_lon,zoom_start_level,zoom_end_level,
+				created_time
+			)values(
+				#{optType},#{userIp},#{stationId},
+				#{dragStartLat},#{dragStartLon},#{dragEndLat},
+				#{dragEndLon},#{zoomStartLevel},#{zoomEndLevel},
+				now()
+			)
+		</insert>
+	<!-- 基于日期查询所有类型的用户操作的次数 -->
+	<!-- List<OptTypeCountDO> listOptTypeCount(String date) -->
+	<select id="listOptTypeCount" resultType="cn.tedu.nybike.pojo.OptTypeCountDO">
+		select 
+			opt_type as optType, count(*) as count
+		from 
+			t_operation 
+		where 
+			date_format(created_time,'%Y-%m-%d')=#{date}
+		group by 
+			opt_type
+	</select>
+	<!-- 基于日期查询访问最多的n个站点的信息 -->
+	<!-- List<StationClickCountDO> listStationClickCount(String date, Integer limit) -->
+	<select id="listStationClickCount" resultType="cn.tedu.nybike.pojo.StationClickCountDO">
+		select 
+			t1.station_id as stationId, t1.count, t2.name 
+		from 
+			(select 
+				station_id, count(*) as count 
+			from 
+				t_operation 
+			where 
+				date_format(created_time,'%Y-%m-%d') =#{date}
+			and 
+				station_id!='Null'
+			group by 
+				station_id
+			order by 
+				count desc 
+			limit #{limit}) t1 join t_station_info t2 
+		on 
+			t1.station_id= t2.station_id
+	</select>
+	<!-- 基于日期查询访问最多的n个用户的IP -->
+	<!-- List<UserIPCountDO> listUserIPCount(String date, Integer limit) -->
+	<select id="listUserIPCount" resultType="cn.tedu.nybike.pojo.UserIPCountDO">
+		select 
+			user_ip as userIP, count(*) as count
+		from 
+			t_operation 
+		where 
+			date_format(created_time,'%Y-%m-%d') =#{date}
+		group by 
+			user_ip
+		order by 
+			count desc
+		limit 
+			#{limit}
+	</select>
+	<!-- 基于日期查询所有类型的用户操作的次数 -->
+	<!-- List<stationCountDo> listStationCount(String date) -->
+	<select id="listStationCount" resultType="cn.tedu.nybike.pojo.stationCountDo">
+		select 
+			start_station_id as stationId,start_station_name as name,start_station_lon as lon,start_station_lat as lat,count(start_station_id) as count
+		from 
+			trip_data 
+		group by 
+			start_station_id
+	</select>
+		<!-- 基于日期查询所有类型的用户操作的次数 -->
+	<!-- List<stationCountDo> listStationCount(String date) -->
+	<select id="listEndStationCount" resultType="cn.tedu.nybike.pojo.stationCountDo">
+		select 
+			end_station_id as stationId,end_station_name as name,end_station_lon as lon,end_station_lat as lat,count(end_station_id) as count
+		from 
+			trip_data se
+		group by 
+			end_station_id
+	</select>
+	<!-- 基于日期查询所有类型的用户操作的次数 -->
+	<!-- List<genderAgeDo> listGenderAgeCount(String date) -->
+	<select id="listGenderAgeCount" resultType="cn.tedu.nybike.pojo.genderAgeDo">
+		select (year(now())-birth_year) as age,count(birth_year) as count,gender as gender
+		from trip_data
+		group by birth_year,gender
+		order by count desc
+	</select>
+
+       
+</mapper>

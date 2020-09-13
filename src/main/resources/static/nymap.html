@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+	<style type="text/css">  
+		html{height:100%}  
+		body{height:100%;margin:0px;padding:0px}  
+		#container{height:100%}  
+	</style> 
+	<script type="text/javascript" src="//api.map.baidu.com/api?v=2.0&ak=UnOzmKxroD4gmuGKA5BW0aExYbrzenDe"></script>
+	<script type="text/javascript" src="js/jquery-1.11.0.min.js"></script>	
+	<link rel="stylesheet" href="css/bootstrap.min.css" type="text/css"></link>
+    <script src="js/bootstrap.min.js"></script>
+	<title>缩放地图</title>
+</head>
+<body>
+	<div id="search">请输入:<input type="text" id="searchName" size="100" value="search" style="width:200px;" /><button type="button" id="btn">search</button></div>
+	<div id="container"></div>
+	<div class="span6" style="float:left;background-color:rgba(51,51;,51,1);width:600px;height:400px;">
+			<table id="mytable" class="table table-striped table-hover bordered" font-size:5em>
+				<thead>
+					<tr>
+						<th>
+							编号
+						</th>
+						<th>
+							站点id
+						</th>
+						<th>
+							站点名称
+						</th>
+						<th>
+							距离当前站点距离(米)
+						</th>
+					</tr>
+				</thead>
+				<tbody id="mytable2" font-size:5em>
+				</tbody>
+			</table>
+			</div>
+</body>
+</html>
+<script type="text/javascript" src="js/jquery-1.11.0.min.js"></script>
+<script type="text/javascript" src="js/treemap.js"></script>
+<script type="text/javascript" src="//api.map.baidu.com/library/CurveLine/1.5/src/CurveLine.min.js"></script>
+<link rel="stylesheet" href="css/page.css" type="text/css"></link>
+<script type="text/javascript">
+	var info_url="realtimeData/infoData";
+	var status_info_url="realtimeData/statusData";//站点车可用情况
+	//var info_url="data/station_information.json";
+	//var status_info_url="data/station_status.json";//站点车可用情况
+
+	var center=new BMap.Point(-73.985696,40.748452);//地图中心点
+	//地图大图标的size
+	var bigIconSize=new BMap.Size(42, 50);1
+	var bigImageSize=new BMap.Size(42, 50);
+	//锚点的size
+	var bigAnchorSize=new BMap.Size(21, 25);
+	var isBigIcon=true;//当前是否使用大图标
+	var bigIconOpts={
+			anchor:bigAnchorSize,
+			imageSize:bigImageSize
+	}
+	var bigIconArr=[
+		new BMap.Icon("img/bi_0.png",bigIconSize,bigIconOpts),
+		new BMap.Icon("img/bi_1.png",bigIconSize,bigIconOpts),
+		new BMap.Icon("img/bi_2.png",bigIconSize,bigIconOpts),
+		new BMap.Icon("img/bi_3.png",bigIconSize,bigIconOpts),
+		new BMap.Icon("img/bi_4.png",bigIconSize,bigIconOpts)
+	]
+	
+	var markerArr=[];//存放所有的marker
+	var stationArr=[];//存放所有的站点信息
+	var sortArr=new Array();//站点对象，这个站点对象增加了一个距离属性
+    var sortedArr=[];//站点排序后的数组
+	
+	var smallIconSize=new BMap.Size(10, 10);
+	var smallImageSize=new BMap.Size(10, 10);
+	//锚点的size
+	var smallAnchorSize=new BMap.Size(5, 10);
+	var smallIconOpts={
+		anchor:smallAnchorSize,
+		imageSize:smallImageSize
+}
+	var smallIconArr=[
+		new BMap.Icon("img/si_0.png",smallIconSize,smallIconOpts),
+		new BMap.Icon("img/si_1.png",smallIconSize,smallIconOpts),
+		new BMap.Icon("img/si_2.png",smallIconSize,smallIconOpts),
+		new BMap.Icon("img/si_3.png",smallIconSize,smallIconOpts),
+		new BMap.Icon("img/si_4.png",smallIconSize,smallIconOpts)
+	]
+	
+	// 保存站点bikeLevel的Map
+	var bikeLevelMap=new Map();
+	//保存站点信息窗所需数据的Map
+	var sContentDataMap=new Map();
+	//定义存放站点距离的Map
+	var sortMap=new Map();
+
+	// 百度地图API功能
+	var map = new BMap.Map("container"); //创建一个地图用例
+	map.centerAndZoom(center,15);      // 初始化地图,用城市名设置地图中心点
+	//map.centerAndZoom(new BMap.Point(40.4454,73.599),8); 
+	map.enableScrollWheelZoom(true);//开启鼠标轮滑缩放
+	//添加平移缩放控件,offset是偏移量，achor右下角显示
+	var opts = {offset: new BMap.Size(150, 5),
+			anchor:BMAP_ANCHOR_BOTTOM_RIGHT}
+	map.addControl(new BMap.NavigationControl(opts));
+	
+
+	//添加地图类型
+	map.addControl(new BMap.MapTypeControl({mapTypes: [BMAP_NORMAL_MAP,BMAP_SATELLITE_MAP,BMAP_PERSPECTIVE_MAP, BMAP_HYBRID_MAP]}));
+	map.setCurrentCity("纽约"); //设置当前城市
+	
+
+	
+	$.get(status_info_url,function(statusData){
+		var statusArr=statusData.data.stations;
+			for(var index in statusArr){
+				var status=statusArr[index];
+				var nba=status.num_bikes_available;
+				var nda=status.num_docks_available;
+				var sid=status.station_id;
+				//信息窗所需的数据放入到map结合
+			/*	var obj={};//创建js的对象
+				obj.nba=nba;
+				obj.sid=sid;
+			*/
+				var obj={
+					sid:sid,
+					nba:nba,
+					nda:nda
+			};
+			sContentDataMap.set(sid,obj);
+				var bikeLevel=getBikeLevel(nba, nda);
+				bikeLevelMap.set(sid,bikeLevel);//ajax是异步调用，不是顺序调用的，而map需要保证先读后写,使用
+				
+			}
+			//发送ajax请求，获取站点信息数据,为了保证先读后写，就放在前一个ajax中。
+			$.get(info_url,function(infoData){
+				var infoArr=infoData.data.stations;
+				stationArr=infoArr;
+				for(var index in infoArr){
+					var info=infoArr[index];
+					//sContentDataMap中获取之前帮点的数据对象
+					var obj=sContentDataMap.get(info.station_id);//通过map就可以判断两个数组的id是否是相同的
+					obj.stationName=info.name;
+					obj.shortName=info.short_name;
+					addMarker(info.lon,info.lat,info.station_id);
+				}
+			});
+	});
+	
+	/**
+	*定义规则
+	*@param nba 可用车数量
+	*@param nda 可用桩数量
+	*/
+	
+	function getBikeLevel(nba,nda){
+		if(nba+nda==0||nba==0){//规避除数不为0
+			return 0;
+		}
+		var abi=nba/(nba+nda);
+		if(abi<0.2){
+			return 1;
+		}
+		if(abi<0.5){
+			return 2;
+		}
+		if(abi<1){
+			return 3;
+		}
+		if(abi==1){
+			return 4;
+		}
+		
+	}
+
+	/**
+	* 在地图上添加一个点标注的方法
+	* @param lon 站点的经度
+	* @param lat 站点的纬度
+	* @param sid 站点的id
+	*/
+	function addMarker(lon,lat,sid){
+		// 从Map中获取站点对应的bikeLevel
+		var bikeLevel=bikeLevelMap.get(sid);
+		// 获取bikeLevel对应的Icon对象
+		var myIcon =bigIconArr[bikeLevel];
+		// 声明地图的Point
+		var point=new BMap.Point(lon,lat);
+		// 创建Marker
+		var marker = new BMap.Marker(point,{icon:myIcon}); // 创建标注    
+		// 为marker对象动态添加一个属性-bikeLevel，值为对应的bikeLevel
+		marker.bikeLevel=bikeLevel;
+		// 将marker添加到数组中
+		markerArr.push(marker);
+		//getImg(lon,lat);
+		
+		//创建信息框对象
+		sContent=getSContent(sid);
+		var infoWindow = new BMap.InfoWindow(sContent);  // 创建信息窗口对象
+		marker.addEventListener("click", function(){ 
+						
+				var params={
+						optType:2,
+						stationId:sid
+				}
+				saveOperation(params);
+			   this.openInfoWindow(infoWindow);
+		});
+		map.addOverlay(marker); // 将标注添加到地图中
+	}
+	/*
+	*监听拖拽开始时地图中心的经纬度坐标
+	*/
+	var dragStartLat;
+	var dragStartLon;
+	map.addEventListener("dragstart", function(){
+		var cp = map.getCenter();
+		dragStartLat=cp.lat;
+		dragStartLon=cp.lng;
+		});
+	
+	/*
+	*监听拖拽结束时地图中心的经纬度坐标
+	*/
+	map.addEventListener("dragend", function(){
+		var cp = map.getCenter();
+		var optType=1;
+		var dragEndLat=cp.lat;
+		var dragEndLon=cp.lng;
+		var params={
+				optType:optType,
+				dragStartLat:dragStartLat,
+				dragStartLon:dragStartLon,
+				dragEndLat:dragEndLat,
+				dragEndLon:dragEndLon
+		}
+		//拖拽完成之后再向服务器传数据
+		saveOperation(params);
+		});
+
+	
+	/*
+	*监听缩放开始时，地图的级别	//把最原始的缩放级别放入到zoomStartLevel中
+	operation.zoomStartLevel=map.getZoom();
+	*/
+	var zoomStartLevel;
+	map.addEventListener("zoomstart", function(evt){
+		　　var zoomLevel=this.getZoom();
+			//把最原始的缩放级别放入到zoomStartLevel中
+			zoomStartLevel=map.getZoom();
+		
+		});
+	
+	/*
+	*定义气泡图标与椭圆图标的切换，监听地图缩放事件，定义缩放的图片规则
+	*/
+	map.addEventListener("zoomend", function(){    
+	    var zoomLevel=this.getZoom();
+	    //在缩放完成后中，把缩放后的级别放入到zoomEndLevel中,然后向服务器请求提交数据
+	    var optType=3;
+	    var zoomEndLevel=zoomLevel;
+	    var params={
+	    		optType:optType,
+	    		zoomStartLevel:zoomStartLevel,
+	    		zoomEndLevel:zoomEndLevel
+	    }
+	    
+	    saveOperation(params);
+	    
+	    if(zoomLevel>15 && isBigIcon==false){ // 应该使用大图标
+	    	// 切换大图标
+	    	switchIcon(false);
+	    	isBigIcon=true;
+	    }
+	    if(zoomLevel<16  && isBigIcon){ // 应该使用小图标
+	    	// 切换小图标
+	    	switchIcon(true)
+	    	isBigIcon=false;
+	    }
+	});
+	
+	/**
+	*发送ajax请求的函数代码
+	*/
+	function saveOperation(params){
+		url="operation/save";
+		//参数名需要跟实体类的属性名是完全一致的，spring根据这个参数名来在后台设置实体类的值
+		$.post(url,params,function(result){
+			//向服务器提交数据并且造成服务器数据改变的都用post，从服务器拿数据告诉服务器符合条件的数据用get方法
+			if(result.state==2000){
+				console.log("操作保存成功");
+			}
+			else{
+				console.log(result.msg);
+			}
+		});
+	}
+	
+	/**
+	* @param flag true-大换小 false-小换大
+	*/
+	function switchIcon(flag){
+		var tempArr;
+		// 切换图标的逻辑
+		if(flag){ // 大换小
+			tempArr=smallIconArr;
+		}else{
+			tempArr=bigIconArr;
+		}
+		// 遍历所有的marker，修改它的Icon
+		for(var index in markerArr){
+			var marker=markerArr[index];
+			marker.setIcon(tempArr[marker.bikeLevel]);
+		}
+	}
+
+	var SContentTemp="<div class='mapbox-content'>"+"<div class='mapbox-content-top'>"+
+	"<span class='window_lastUpdate'> 0 ms ago </span> <span class='window_info_button'></span></div>"+
+	"<div class='mapbox-content-header'>"+
+	"<h1 class='mapbox-content-header-stationName'>[stationName]</h1></div><div class='mapbox-content-detail'><div class='mapbox-content-detail-bikes-available'>"+
+	"<span class='mapbox-content-detail-bikes-available-val'>[nba]</span>"+
+	"<span class='mapbox-content-detail-bikes-available-lbl'>Bikes</span></div>"+
+	"<div class='mapbox-content-detail-docks-available'>"+
+	"<span class='mapbox-content-detail-docks-available-val'>[nda]</span> <span class='mapbox-content-detail-docks-available-lbl'>Docks</span></div></div>"+
+	"<div class='mapbox-content-footer'><span class='mapbox-content-footer-shortName'> Bike station:[shortName]</span></div></div>";
+
+	function getSContent(sid){
+		//函数的参数不能过多，可以通过一个固定的参数来获取其他的数据
+		var obj=sContentDataMap.get(sid);
+		var sContent=SContentTemp.replace("[stationName]",obj.stationName);
+		sContent=sContent.replace("[nba]",obj.nba);
+		sContent=sContent.replace("[nda]",obj.nda);
+		sContent=sContent.replace("[shortName]",obj.shortName);
+		return sContent;
+	}
+	//搜索功能
+	var searchText=document.getElementById("searchName");
+    var searchButton = document.getElementById('btn');
+    var myGeo = new BMap.Geocoder();//地址逆解析
+    searchButton.addEventListener('click', function(){
+		var searchName=searchText.value;
+		console.log(searchName);
+		/*var local = new BMap.LocalSearch(map, {
+		renderOptions: {map: map, panel: "r-result"}
+		});
+		*/
+		//获取搜索地点的经纬度
+		//local.search(searchName); 
+		searchPoint(searchName);
+		
+    });
+    /**
+    *自定义一个函数，
+    */
+    function searchPoint(searchName){
+
+    	//只可以根据station信息表的站点名称来匹配，这个站点是否存在，如果存在的话，其他的站点就要计算与这个站点的经纬度距离，取距离最短的10个标注的显示
+		for(var index in stationArr){
+			var station=stationArr[index];
+			//console.log(station);
+			if(searchName==station.name){
+				map.centerAndZoom(new BMap.Point(station.lon,station.lat),16); 
+				console.log(" station.name: "+station.name+" station.lon "+station.lon+" station.lat "+station.lat);
+				getTop(station.lon,station.lat);
+				}
+			}
+    }
+ 
+    /**
+    *计算所有站点与指定站点的距离，取距离最小的前10个
+    */
+  // let sortMap=new TreeMap();
+    function getTop(lon1,lat1)
+    { 
+    	var pointA=new BMap.Point(lon1,lat1);
+    	for(var index in stationArr){
+			var station=stationArr[index];
+			var tempObj={};
+			tempObj.station_id=station.station_id;
+			tempObj.name=station.name;
+			tempObj.lon=station.lon;//目的站点
+			tempObj.lat=station.lat;
+
+			//tempObj.distance=getDistance2(lon1,lat1,tempObj.lon,tempObj.lat);
+			var pointB=new BMap.Point(station.lon,station.lat);
+			var distemp=map.getDistance(pointA,pointB).toFixed(2);
+			tempObj.distance=parseFloat(distemp);
+			var opt={
+					station_id:station.station_id,
+					name:station.name,
+					lon:station.lon,
+					lat:station.lat,
+					distance:distemp
+			}
+			
+			if(distemp<500){
+				console.log(opt);
+				//console.log("标注计算得出的距离："+tempObj.name+" "+tempObj.distance);
+			}
+			
+			sortArr.push(tempObj);
+			//console.log("tempObj.distance"+tempObj.distance);
+			
+    	}
+    	sortArr=sortByDistance(sortArr);
+    	for(var index in sortArr){
+    		var sorttmep=sortArr[index];
+    		//console.log(typeof(sorttmep.distance));
+        	console.log("排序后的距离："+sorttmep.distance);
+    	}
+    	//sortedArr=sortArr;
+    	sortedArr=sortArr.slice(0,11);
+    	console.log(sortedArr);
+    	console.log(sortedArr);
+    	drawLine();//画弧线
+    	topShow(sortedArr);
+   	
+    }
+    function sortByDistance(sortArr){
+    	var len=sortArr.length;
+    	var preIndex,current;
+    	for(var i=1;i<len;i++){
+    		preIndex=i-1;
+    		current=sortArr[i];
+    		while(preIndex>=0&&parseFloat(sortArr[preIndex].distance)>parseFloat(current.distance)){
+    			sortArr[preIndex+1]=sortArr[preIndex];
+    			preIndex--;
+    		}
+    		sortArr[preIndex+1]=current;
+    	}
+    	return sortArr;
+    }
+    /**
+    *给地图添加弧线
+    **/
+    function drawLine(){
+    	var point0=new BMap.Point(sortedArr[0].lon,sortedArr[0].lat);
+    	var point1=new BMap.Point(sortedArr[1].lon,sortedArr[1].lat);
+    	var point2=new BMap.Point(sortedArr[2].lon,sortedArr[2].lat);
+    	var point3=new BMap.Point(sortedArr[3].lon,sortedArr[3].lat);
+    	var point4=new BMap.Point(sortedArr[4].lon,sortedArr[4].lat);
+    	var point5=new BMap.Point(sortedArr[5].lon,sortedArr[5].lat);
+    	var point6=new BMap.Point(sortedArr[6].lon,sortedArr[6].lat);
+    	var point7=new BMap.Point(sortedArr[7].lon,sortedArr[7].lat);
+    	var point8=new BMap.Point(sortedArr[8].lon,sortedArr[8].lat);
+    	var point9=new BMap.Point(sortedArr[9].lon,sortedArr[9].lat);
+    	var point10=new BMap.Point(sortedArr[10].lon,sortedArr[10].lat);
+    	
+    	var points=[point0,point1,point2,point3,point4,point5,point6,point7,point8,point9];
+    //	var curve = new BMapLib.CurveLine(points, {strokeColor:"blue", strokeWeight:3, strokeOpacity:0.5}); //创建弧线对象
+    //	map.addOverlay(curve); //添加到地图中
+    	
+    	var points1=[point0,point1];
+    	var points2=[point0,point2];
+    	var points3=[point0,point3];
+    	var points4=[point0,point4];
+    	var points5=[point0,point5];
+    	var points6=[point0,point6];
+    	var points7=[point0,point7];
+    	var points8=[point0,point8];
+    	var points9=[point0,point9];
+    	var points10=[point0,point10];
+
+    	var curve1 = new BMapLib.CurveLine(points1, {strokeColor:"blue", strokeWeight:3, strokeOpacity:0.5}); //创建弧线对象
+    	map.addOverlay(curve1); //添加到地图中
+    	var curve2 = new BMapLib.CurveLine(points2, {strokeColor:"blue", strokeWeight:3, strokeOpacity:0.5}); //创建弧线对象
+    	map.addOverlay(curve2); //添加到地图中
+    	var curve3 = new BMapLib.CurveLine(points3, {strokeColor:"blue", strokeWeight:3, strokeOpacity:0.5}); //创建弧线对象
+    	map.addOverlay(curve3); //添加到地图中
+    	var curve4 = new BMapLib.CurveLine(points4, {strokeColor:"blue", strokeWeight:3, strokeOpacity:0.5}); //创建弧线对象
+    	map.addOverlay(curve4); //添加到地图中
+    	var curve5 = new BMapLib.CurveLine(points5, {strokeColor:"blue", strokeWeight:3, strokeOpacity:0.5}); //创建弧线对象
+    	map.addOverlay(curve5); //添加到地图中
+    	var curve6 = new BMapLib.CurveLine(points6, {strokeColor:"blue", strokeWeight:3, strokeOpacity:0.5}); //创建弧线对象
+    	map.addOverlay(curve6); //添加到地图中
+    	var curve7 = new BMapLib.CurveLine(points7, {strokeColor:"blue", strokeWeight:3, strokeOpacity:0.5}); //创建弧线对象
+    	map.addOverlay(curve7); //添加到地图中
+    	var curve8 = new BMapLib.CurveLine(points8, {strokeColor:"blue", strokeWeight:3, strokeOpacity:0.5}); //创建弧线对象
+    	map.addOverlay(curve8); //添加到地图中
+    	var curve9 = new BMapLib.CurveLine(points9, {strokeColor:"blue", strokeWeight:3, strokeOpacity:0.5}); //创建弧线对象
+    	map.addOverlay(curve9); //添加到地图中
+    	var curve10 = new BMapLib.CurveLine(points10, {strokeColor:"blue", strokeWeight:3, strokeOpacity:0.5}); //创建弧线对象
+    	map.addOverlay(curve10); //添加到地图中
+    	curve.enableEditing(); //开启编辑功能
+			
+    }
+    /**
+    *显示前十的数据在表格中
+    */
+    function topShow(sortedArr){
+    	var html='';
+    	for(var index in sortedArr){
+    		var sort=sortedArr[index];
+			html=html+'<tr>';
+			html=html+'<td>'+index+'</td>';
+			html=html+'<td>'+sort.station_id+'</td>';
+			html=html+'<td>'+sort.name+'</td>';
+			html=html+'<td>'+sort.distance+'</td>';
+			html=html+'</tr>';
+    	}
+    	$('#mytable2').html(html);
+    	
+    }
+
+
+
+</script>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>年龄性别分析</title>
+ <!-- 引入 ECharts 文件 -->
+	<script type="text/javascript" src="js/jquery-1.11.0.min.js"></script>	
+	<link rel="stylesheet" href="css/bootstrap.min.css" type="text/css"></link>
+    <script src="js/bootstrap.min.js"></script>
+	<link rel="stylesheet" href="css/page.css" type="text/css"></link>
+    <script src="js/echarts.min.js"></script>
+    <script src="js/dark.js"></script>
+</head>
+<body>
+	<div id="scatter" style="width: 1200px;height:800px;float:left;"></div>
+	<div id="pie" style="width: 400px;height:400px;float:left;"></div>
+		 	<div class="span6" style="float:left;background-color:rgba(51,51;,51,1);width:600px;height:600px;">
+			<table id="mytable" class="table table-striped table-hover bordered" font-size:5em>
+				<thead>
+					<tr>
+						<th>
+							编号
+						</th>
+						<th>
+							年龄
+						</th>
+						<th>
+							性别
+						</th>
+						<th>
+							骑行次数
+						</th>
+					</tr>
+				</thead>
+				<tbody id="mytable2" font-size:5em>
+				</tbody>
+			</table>
+			</div>
+</body>
+<script>
+	var scatterChart = echarts.init(document.getElementById('scatter'));
+	var pieChart = echarts.init(document.getElementById('pie'));
+	var gender_url="operation/gender"
+	$.get(gender_url,function(result){
+		var data=result.data;
+		console.log("data: "+result);
+		//处理成两个格式
+		var ageData=data.ageData;
+		var countData=data.countData;
+		var genderData=data.genderData;
+		var boy=[];
+		var countBoy=0;
+		var girl=[];
+		var countGirl=0;
+		var sumBoy=0;
+		var sumGirl=0;
+		var sumOther=0;
+		for(var i=0;i<ageData.length;i++){
+			if(genderData[i]=="1"&&(Number(ageData[i])<100||Number(ageData[i])>12))//如果是男生
+			{
+				var tempBoy=[ageData[i],countData[i]];
+				boy.push(tempBoy);
+				sumBoy+=countData[i];
+				countBoy++;
+			}
+			if(genderData[i]=="2"&&(Number(ageData[i])<100||Number(ageData[i])>12))//如果是女生
+			{
+				var tempGirl=[ageData[i],countData[i]];
+				girl.push(tempGirl);
+				sumGirl+=countData[i];
+				countGirl++;
+			}
+			if(genderData[i]=="0")//如果是未知性别
+			{
+				sumOther+=countData[i];
+			}
+		}
+		var avgBoy=sumBoy/countBoy;
+		var avgGirl=sumGirl/countGirl;
+		console.log("boy:"+boy);
+		console.log("countGirl:"+countGirl);
+		console.log("girl:"+typeof(girl)+ girl.length);
+		console.log("girl:"+girl);
+		getScatter(boy,girl,avgBoy,avgGirl,sumBoy,sumGirl,sumOther);
+	    topShow(ageData,countData,genderData);
+		
+	});
+	/**
+	*显示10个就好
+	*/
+    function topShow(ageData,countData,genderData){
+    	var html='';
+    	var sex='';
+    	for(var index=0;index<10;index++){
+    		if(genderData[index]=='0'){
+    			sex='未知性别';
+    		}
+    		if(genderData[index]=='1'){
+    			sex='男';
+    		}
+    		if(genderData[index]=='2'){
+    			sex='女';
+    		}
+			html=html+'<tr>';
+			html=html+'<td>'+index+'</td>';
+			html=html+'<td>'+ageData[index]+'</td>';
+			html=html+'<td>'+sex+'</td>';
+			html=html+'<td>'+countData[index]+'</td>';
+			html=html+'</tr>';
+    	}
+    	$('#mytable2').html(html);
+    	
+    }
+	function getScatter(boy,girl,avgBoy,avgGirl,sumBoy,sumGirl,sumOther){
+		option = {
+			    title: {
+			        text: '性别与年龄与骑车次数的关系',
+			    },
+			    grid: {
+			        left: '3%',
+			        right: '7%',
+			        bottom: '3%',
+			        containLabel: true
+			    },
+			    tooltip: {
+			        // trigger: 'axis',
+			        showDelay: 0,
+			        axisPointer: {
+			            show: true,
+			            type: 'cross',
+			            lineStyle: {
+			                type: 'dashed',
+			                width: 1
+			            }
+			        }
+			    },
+			    toolbox: {
+			        feature: {
+			            dataZoom: {},
+			            brush: {
+			                type: ['rect', 'polygon', 'clear']
+			            }
+			        }
+			    },
+			    brush: {
+			    },
+			    legend: {
+			        data: ['女性', '男性'],
+			        left: 'center'
+			    },
+			    xAxis: [
+			        {
+			            type: 'value',
+			            scale: true,
+			            axisLabel: {
+			                formatter: '{value} 岁'
+			            },
+			            splitLine: {
+			                show: false
+			            }
+			        }
+			    ],
+			    yAxis: [
+			        {
+			            type: 'value',
+			            scale: true,
+			            axisLabel: {
+			                formatter: '{value} 次'
+			            },
+			            splitLine: {
+			                show: false
+			            }
+			        }
+			    ],
+			    series: [
+			        {
+			            name: '女性',
+			            type: 'scatter',
+			            data: girl,
+			            markArea: {
+			                silent: true,
+			                itemStyle: {
+			                    color: 'transparent',
+			                    borderType: 'dashed'
+			                },
+			                data: [[{
+			                    name: '女性分布区间',
+			                    xAxis: 'min',
+			                    yAxis: 'min'
+			                }, {
+			                    xAxis: 'max',
+			                    yAxis: 'max'
+			                }]]
+			            },
+			            markPoint: {
+			                data: [
+			                    {type: 'max', name: '最大值'},
+			                    {type: 'min', name: '最小值'}
+			                ]
+			            },
+			            markLine: {
+			                lineStyle: {
+			                    type: 'solid'
+			                },
+			                data: [
+			                    {type: 'average', name: '平均值'},
+			                    { xAxis: avgGirl }
+			                ]
+			            }
+			        },
+			        {
+			            name: '男性',
+			            type: 'scatter',
+			            data:boy,
+			            markArea: {
+			                silent: true,
+			                itemStyle: {
+			                    color: 'transparent',
+			                    borderType: 'dashed'
+			                },
+			                data: [[{
+			                    name: '男性分布区间',
+			                    xAxis: 'min',
+			                    yAxis: 'min'
+			                }, {
+			                    xAxis: 'max',
+			                    yAxis: 'max'
+			                }]]
+			            },
+			            markPoint: {
+			                data: [
+			                    {type: 'max', name: '最大值'},
+			                    {type: 'min', name: '最小值'}
+			                ]
+			            },
+			            markLine: {
+			                lineStyle: {
+			                    type: 'solid'
+			                },
+			                data: [
+			                    {type: 'average', name: '平均值'},
+			                    { xAxis: avgBoy }
+			                ]
+			            }
+			        }
+			    ]
+			};
+
+		scatterChart.setOption(option);
+		pieOption = {
+			    tooltip: {
+			        trigger: 'item',
+			        formatter: '{a} <br/>{b}: {c} ({d}%)'
+			    },
+			    legend: {
+			        orient: 'vertical',
+			        left: 10,
+			        data: ['男', '', '女', '未知性别']
+			    },
+			    series: [
+			        {
+			            name: '骑行次数',
+			            type: 'pie',
+			            radius: ['50%', '70%'],
+			            avoidLabelOverlap: false,
+			            label: {
+			                show: false,
+			                position: 'center'
+			            },
+			            emphasis: {
+			                label: {
+			                    show: true,
+			                    fontSize: '30',
+			                    fontWeight: 'bold'
+			                }
+			            },
+			            labelLine: {
+			                show: false
+			            },
+			            data: [
+			                {value: sumBoy, name: '男'},
+			                {value: sumGirl, name: '女'},
+			                {value: sumOther, name: '未知性别'},
+			            ]
+			        }
+			    ]
+			};
+		pieChart.setOption(pieOption);	
+
+	}
+</script>
+</html>

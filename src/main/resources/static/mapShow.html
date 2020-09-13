@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>站点信息可视化</title>
+ <!-- 引入 ECharts 文件 -->
+ 	<script type="text/javascript" src="//api.map.baidu.com/api?v=2.0&ak=UnOzmKxroD4gmuGKA5BW0aExYbrzenDe"></script>
+	<script type="text/javascript" src="js/jquery-1.11.0.min.js"></script>	
+	<link rel="stylesheet" href="css/bootstrap.min.css" type="text/css"></link>
+    <script src="js/bootstrap.min.js"></script>
+	<link rel="stylesheet" href="css/page.css" type="text/css"></link>
+    <script src="js/echarts.min.js"></script>
+    <script src="js/dark.js"></script>
+</head>
+<body>
+	 <div id="map" style="width:600px;height:900px;float:left;"></div>
+	  <div id="countStation" style="width: 600px;height:900px;float:left;"></div>
+	 	<div class="span6" style="float:left;background-color:rgba(51,51;,51,1);width:600px;height:900px;">
+			<table id="mytable" class="table table-striped table-hover bordered" font-size:5em>
+				<thead>
+					<tr>
+						<th>
+							编号
+						</th>
+						<th>
+							站点名称
+						</th>
+						<th>
+							骑行数量
+						</th>
+					</tr>
+				</thead>
+				<tbody id="mytable2" font-size:5em>
+				</tbody>
+			</table>
+			</div>
+</body>
+<script type="text/javascript" src="js/jquery-1.11.0.min.js"></script>
+<script>
+var mapChart = echarts.init(document.getElementById('map'));
+var countStationChart = echarts.init(document.getElementById('countStation'));
+var countStationOption = {
+	    title: {
+	        text: '各个站点的骑行梳理'
+	    },
+	    tooltip: {},
+	    xAxis: {
+	    	name:'站点名称',
+	    	data:[]
+	    },
+	    yAxis: {
+	    },
+	    series: [{
+	        type: 'bar',
+	        data: []
+	    }]
+	};
+/**
+ * 向后台请求数据
+ */
+ var map_url="operation/showData"
+ $.get(map_url,function(result){
+	 console.log(result);
+	 var mapData=result.data;
+	 var mapId=mapData.mapId;
+	 var mapName=mapData.mapName;
+	 var mapLon=mapData.mapLon;
+	 var mapLat=mapData.maplat;
+	 var mapStationCount=mapData.mapStationCount;
+	 var length=mapName.length;
+	 topShow(mapId,mapName,mapStationCount)
+
+	var info_url="realtimeData/infoData";
+	var status_info_url="realtimeData/statusData";//站点车可用情况
+
+	var center=new BMap.Point(-73.985696,40.748452);//地图中心点
+	//地图大图标的size
+	var bigIconSize=new BMap.Size(30, 30);
+	var bigImageSize=new BMap.Size(30, 30);
+	//锚点的size
+	var bigAnchorSize=new BMap.Size(15, 30);
+	var isBigIcon=true;//当前是否使用大图标
+	var bigIconOpts={
+			anchor:bigAnchorSize,
+			imageSize:bigImageSize
+	}
+	var bigIconArr=[
+		new BMap.Icon("img/si_0.png",bigIconSize,bigIconOpts),
+		new BMap.Icon("img/si_1.png",bigIconSize,bigIconOpts),
+		new BMap.Icon("img/si_2.png",bigIconSize,bigIconOpts),
+		new BMap.Icon("img/si_3.png",bigIconSize,bigIconOpts),
+		new BMap.Icon("img/si_4.png",bigIconSize,bigIconOpts)
+	]
+	
+	var markerArr=[];//存放所有的marker
+
+	
+	// 保存站点bikeLevel的Map
+	var bikeLevelMap=new Map();
+	//保存站点信息窗所需数据的Map
+	var sContentDataMap=new Map();
+
+
+	// 百度地图API功能
+	var map = new BMap.Map("map"); //创建一个地图用例
+	map.centerAndZoom(center,15);      // 初始化地图,用城市名设置地图中心点
+	//map.centerAndZoom(new BMap.Point(40.4454,73.599),8); 
+	map.enableScrollWheelZoom(true);//开启鼠标轮滑缩放
+	//添加平移缩放控件,offset是偏移量，achor右下角显示
+	var opts = {offset: new BMap.Size(150, 5),
+			anchor:BMAP_ANCHOR_BOTTOM_RIGHT}
+	map.addControl(new BMap.NavigationControl(opts));
+	
+	$.get(status_info_url,function(statusData){
+		var statusArr=statusData.data.stations;
+			for(var index in statusArr){
+				var status=statusArr[index];
+				var nba=status.num_bikes_available;
+				var nda=status.num_docks_available;
+				var sid=status.station_id;
+				//信息窗所需的数据放入到map结合
+
+				var obj={
+					sid:sid,
+					scount:mapStationCount[index]
+			};
+			sContentDataMap.set(sid,obj);
+				var bikeLevel=getBikeLevel(nba, nda);
+				bikeLevelMap.set(sid,bikeLevel);//ajax是异步调用，不是顺序调用的，而map需要保证先读后写,使用
+				
+			}
+			//发送ajax请求，获取站点信息数据,为了保证先读后写，就放在前一个ajax中。
+			$.get(info_url,function(infoData){
+				var infoArr=infoData.data.stations;
+				for(var index in infoArr){
+					var info=infoArr[index];
+					//sContentDataMap中获取之前帮点的数据对象
+					var obj=sContentDataMap.get(info.station_id);//通过map就可以判断两个数组的id是否是相同的
+					obj.stationName=info.name;
+					obj.shortName=info.short_name;
+					addMarker(info.lon,info.lat,info.station_id);
+				}
+			});
+	});
+	/**
+	*定义规则
+	*@param nba 可用车数量
+	*@param nda 可用桩数量
+	*/
+	
+	function getBikeLevel(nba,nda){
+		if(nba+nda==0||nba==0){//规避除数不为0
+			return 0;
+		}
+		var abi=nba/(nba+nda);
+		if(abi<0.2){
+			return 1;
+		}
+		if(abi<0.5){
+			return 2;
+		}
+		if(abi<1){
+			return 3;
+		}
+		if(abi==1){
+			return 4;
+		}
+		
+	}
+
+	/**
+	* 在地图上添加一个点标注的方法
+	* @param lon 站点的经度
+	* @param lat 站点的纬度
+	* @param sid 站点的id
+	*/
+	function addMarker(lon,lat,sid){
+		// 从Map中获取站点对应的bikeLevel
+		var bikeLevel=bikeLevelMap.get(sid);
+		// 获取bikeLevel对应的Icon对象
+		var myIcon =bigIconArr[bikeLevel];
+		// 声明地图的Point
+		var point=new BMap.Point(lon,lat);
+		// 创建Marker
+		var marker = new BMap.Marker(point,{icon:myIcon}); // 创建标注    
+		// 为marker对象动态添加一个属性-bikeLevel，值为对应的bikeLevel
+		marker.bikeLevel=bikeLevel;
+		// 将marker添加到数组中
+		markerArr.push(marker);
+		//getImg(lon,lat);
+		
+		//创建信息框对象
+		sContent=getSContent(sid);
+		var infoWindow = new BMap.InfoWindow(sContent);  // 创建信息窗口对象
+		marker.addEventListener("mouseover", function(){ 
+			   this.openInfoWindow(infoWindow);
+		});
+		map.addOverlay(marker); // 将标注添加到地图中
+	}
+	var SContentTemp="<div class='mapbox-content'>"+"<div class='mapbox-content-top'>"+
+	"<span class='window_lastUpdate'> 该站点信息数量 </span> <span class='window_info_button'></span></div>"+
+	"<div class='mapbox-content-header'>"+
+	"<h1 class='mapbox-content-header-stationName'>[stationName]</h1></div><div class='mapbox-content-detail'><div class='mapbox-content-detail-bikes-available'>"+
+	"<span class='mapbox-content-detail-bikes-available-val'>[stationCount]</span>"+
+	"</div>"+"<div class='mapbox-content-footer'><span class='mapbox-content-footer-shortName'> Bike station:[shortName]</span></div></div>";
+
+	function getSContent(sid){
+		//函数的参数不能过多，可以通过一个固定的参数来获取其他的数据
+		var obj=sContentDataMap.get(sid);
+		var sContent=SContentTemp.replace("[stationName]",obj.stationName);
+		if(parseInt(obj.scount)>0){
+			sContent=sContent.replace("[stationCount]",obj.scount);
+		}
+		else{
+			sContent=sContent.replace("[stationCount]",0);
+		}
+		sContent=sContent.replace("[shortName]",obj.shortName);
+		return sContent;
+	}
+    /**
+	    *显示前十的数据在表格中
+	    */
+	    topShow(mapId,mapName,mapStationCount);
+	    function topShow(mapId,mapName,mapStationCount){
+	    	var html='';
+	    	for(var index=0;index<mapId.length;index++){
+				html=html+'<tr>';
+				html=html+'<td>'+index+'</td>';
+				html=html+'<td>'+mapId[index]+'</td>';
+				html=html+'<td>'+mapName[index]+'</td>';
+				html=html+'<td>'+mapStationCount[index]+'</td>';
+				html=html+'</tr>';
+	    	}
+	    	$('#mytable2').html(html);
+	    	
+	    }
+	    setCountStation(mapName,mapStationCount);
+	    function setCountStation(mapName,mapStationCount){
+	    	
+	    	countStationChart.setOption(countStationOption);
+	    	countStationChart.setOption({
+	    		xAxis:{
+	    			data:mapName
+	    		},
+	    		series:[{
+	    			data:mapStationCount
+	    		}]	
+	    	});
+	    }
+    
+ });
+</script>
+</html>

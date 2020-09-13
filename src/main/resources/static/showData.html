@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>数据大屏</title>
+ <!-- 引入 ECharts 文件 -->
+    <link rel="stylesheet" href="css/bootstrap.css" type="text/css"></link>
+    <script src="js/echarts.min.js"></script>
+    <script src="js/dark.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="js/jquery-1.11.0.min.js"></script>
+</head>
+<body>
+<div class="container-fluid">
+<div class="row-fluid">
+<!-- 为ECharts准备一个具备大小（宽高）的Dom -->
+    <div id="countAll" style="width: 600px;height:400px;float:left;"></div>
+    <div id="countStation" style="width: 600px;height:400px;float:left;"></div>
+     <div id="countIp" style="width: 600px;height:400px;float:left;"></div>
+</div>
+</div>
+</body>
+<script>
+//基于准备好的dom，初始化echarts实例
+var countAllChart = echarts.init(document.getElementById('countAll'),'dark');
+var countStationChart = echarts.init(document.getElementById('countStation'),'dark');
+var countIpChart = echarts.init(document.getElementById('countIp'),'dark');
+// 指定图表的配置项和数据
+var countAllOption = {
+    title: {
+        text: '访问量'
+    },
+    tooltip: {},
+    legend: {
+        data:['访问量']
+    },
+    xAxis: {
+    	name:'访问量'
+    },
+    yAxis: {
+    	name:'操作类型',
+    	data:[]
+    },
+    series: [{
+        type: 'bar',
+        data: []
+    }]
+};
+var countStationOption = {
+	    title: {
+	        text: '点击量排名前五的站点'
+	    },
+	    tooltip: {},
+	    xAxis: {
+	    	name:'站点id',
+	    	data:[]
+	    },
+	    yAxis: {
+	    },
+	    series: [{
+	        type: 'bar',
+	        data: []
+	    }]
+	};
+var countIpOption = {
+	    title: {
+	        text: '访问量排名前五的用户IP'
+	    },
+	    tooltip: {},
+	    xAxis: {
+	    	name:'用户IP',
+	    	data:[]
+	    },
+	    yAxis: {
+	    },
+	    series: [{
+	        type: 'bar',
+	        data: []
+	    }]
+	};
+//接收后台推送的数据
+var url="operation/subscribe?id=tester&date=2020-07-21&interval=5000&stationCountLimit=5&ipLimit=5";
+var source=new EventSource(url);
+var countXData=[];
+var countYData=[];
+var countStationXData=[];
+var countStationNameData=[];
+var countStationYData=[];
+var countIPXData=[];
+var countIPYData=[];
+source.onmessage=function(event){
+	console.log(event.data);
+	//console.log(event.data.accessCountXdata);
+	jsonData=JSON.parse(event.data);
+	countXData=jsonData.accessCountXData;
+	countYData=jsonData.accessCounYXData;
+	
+	countStationXData=jsonData.stationCountXData;
+	countStationNameData=jsonData.stationCountNameData;
+	countStationYData=jsonData.stationCountYData;
+	
+	countIPXData=jsonData.ipCountXData;
+	countIPYData=jsonData.ipCountYData;
+	
+	console.log("countStationXData："+countStationXData);
+	console.log("countStationNameData："+countStationNameData);
+	console.log("countStationYData："+countStationYData);
+	
+	console.log("countXData："+countIPXData);
+	console.log("countYData："+countIPYData);
+	setCountAll(countXData,countYData);
+	setCountStation(countStationXData,countStationNameData,countStationYData);
+	setCountIp(countIPXData,countIPYData);
+	
+}
+function setCountAll(countXData,countYData){
+	
+	// 使用刚指定的配置项和数据显示图表。
+	countAllChart.setOption(countAllOption);
+	countAllChart.setOption({
+		yAxis:{
+			data:countYData
+		},
+		series:[{
+			name:'访问量',
+			data:countXData
+		}
+		]
+	
+	});
+}
+function setCountStation(countStationXData,countStationNameData,countStationYData){
+	
+	// 使用刚指定的配置项和数据显示图表。
+	//将站点名字与站点点击数量对应起来
+	var seriesArr=[];
+	for(var i=0;i<countStationNameData.length;i++){
+		seriesArr.push({
+			name:countStationNameData[i],
+			data:countStationYData[i]
+		});
+	}
+	console.log("seriesArr"+seriesArr+" seriesArr.length"+seriesArr.length);
+	countStationChart.setOption(countStationOption);
+	countStationChart.setOption({
+		xAxis:{
+			data:countStationXData
+		},
+		tooltip:{
+			data:countStationNameData
+		},
+		series:[{
+			data:countStationYData
+		}]	
+	});
+}
+function setCountIp(countIpXData,countIpYData){
+	
+	countIpChart.setOption(countIpOption);
+	countIpChart.setOption({
+		xAxis:{
+			data:countIpXData
+		},
+		series:[{
+			data:countIpYData
+		}]	
+	});
+}
+
+
+</script>
+</html>
